@@ -1,38 +1,49 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
-import fs from "fs";
-import path from "path";
-import boxen from "boxen";
+import fs from "fs"; // interact with file system
+import path from "path"; // interact with paths
+import boxen from "boxen"; // put command line text in boxes
+import { authorize, addEvent, updateEvent, deleteEvent } from "./calendar.js";
 
+// arrays to store tasks and plants
 let tasks = [];
 let plants = [];
 
 // function to add a delay
 function sleep(ms) {
+  // wrap in a promise so that we can use the function asynchronously
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // function to create a typing effect for text
 async function typeEffect(text, characterArt) {
+  // split text into lines and find the longest line length
   const lines = text.split("\n");
   const longestLineLength = Math.max(...lines.map((line) => line.length));
+
+  // pad each line to the longest line length so everything is evenly spaced
   const paddedText = lines
     .map((line) => line.padEnd(longestLineLength))
     .join("\n");
 
+  // create a box with the padded text
   const boxContent = boxen(paddedText, {
     padding: 1,
     margin: 1,
     borderStyle: "round",
   });
+
+  // combine the character art and the box content line by line
   const combined = characterArt
     .split("\n")
+    // iterate over each line of the character art
     .map((line, i) => {
       const boxLine = boxContent.split("\n")[i] || "";
       return line + "  " + (boxLine || "");
     })
     .join("\n");
 
+  // output the combined content with a typing effect
   for (const char of combined) {
     process.stdout.write(char);
     await sleep(1); // adjust delay as needed
@@ -61,6 +72,7 @@ async function loadPlantArt(plantName) {
 // main menu function
 async function mainMenu() {
   console.clear();
+  // load character art for character A and B
   const characterA = await loadCharacterArt("characterA.txt");
   const characterB = await loadCharacterArt("characterB.txt");
 
@@ -69,6 +81,7 @@ async function mainMenu() {
     characterA
   );
 
+  // prompt the user to start the app
   const { start } = await inquirer.prompt([
     {
       type: "input",
@@ -81,9 +94,11 @@ async function mainMenu() {
 
   await typeEffect("let’s choose your personal assistant.", characterA);
 
+  // display character options
   console.log(chalk.green(characterA));
   console.log(chalk.blue(characterB));
 
+  // prompt the user to choose a character
   const { character } = await inquirer.prompt([
     {
       type: "list",
@@ -95,6 +110,7 @@ async function mainMenu() {
 
   const selectedCharacter = character === "girl" ? characterA : characterB;
 
+  // prompt the user to name the assistant and enter their name
   const { assistantName } = await inquirer.prompt([
     {
       type: "input",
@@ -133,6 +149,7 @@ async function showGuide(characterArt) {
     "→ show garden",
   ];
 
+  // prompt the user to select an action
   const { action } = await inquirer.prompt([
     {
       type: "list",
@@ -143,6 +160,7 @@ async function showGuide(characterArt) {
   ]);
 
   console.log("");
+  // switch statement to handle the selected action
   switch (action) {
     case "→ add a task":
       await addTask(characterArt);
@@ -170,6 +188,7 @@ async function showGuide(characterArt) {
 
 // function to add a task
 async function addTask(characterArt) {
+  // prompt the user to enter the task and time
   const { task } = await inquirer.prompt([
     {
       type: "input",
@@ -186,7 +205,16 @@ async function addTask(characterArt) {
     },
   ]);
 
-  tasks.push({ id: tasks.length + 1, task, time, done: false });
+  // authorize and add the event to google calendar
+  const auth = await authorize();
+  const eventId = await addEvent(auth, {
+    task,
+    time: new Date().toISOString().split("T")[0] + `T${time}:00Z`,
+  });
+
+  // add the task to the tasks array
+  tasks.push({ id: tasks.length + 1, task, time, done: false, eventId });
+
   await typeEffect(chalk.green("task added successfully!"), characterArt);
   console.log("");
 }
@@ -198,8 +226,10 @@ async function editTask(characterArt) {
     return;
   }
 
+  // prompt the user to select a task to edit
   const { id } = await selectTask("edit");
 
+  // prompt the user to enter the new task and time
   const { newTask } = await inquirer.prompt([
     {
       type: "input",
@@ -216,10 +246,20 @@ async function editTask(characterArt) {
     },
   ]);
 
+  // find the task in the tasks array and update it
   const taskIndex = tasks.findIndex((task) => task.id === id);
   if (taskIndex !== -1) {
-    tasks[taskIndex].task = newTask;
-    tasks[taskIndex].time = newTime;
+    const task = tasks[taskIndex];
+    task.task = newTask;
+    task.time = newTime;
+
+    // authorize and update the event in google calendar
+    const auth = await authorize();
+    await updateEvent(auth, {
+      ...task,
+      time: new Date().toISOString().split("T")[0] + `T${newTime}:00Z`,
+    });
+
     await typeEffect(chalk.green("task edited successfully!"), characterArt);
   } else {
     await typeEffect(chalk.red("task not found."), characterArt);
@@ -234,9 +274,17 @@ async function deleteTask(characterArt) {
     return;
   }
 
+  // prompt the user to select a task to delete
   const { id } = await selectTask("delete");
   const taskIndex = tasks.findIndex((task) => task.id === id);
   if (taskIndex !== -1) {
+    const task = tasks[taskIndex];
+
+    // authorize and delete the event from google calendar
+    const auth = await authorize();
+    await deleteEvent(auth, task.eventId);
+
+    // remove the task from the tasks array
     tasks.splice(taskIndex, 1);
     await typeEffect(chalk.green("task deleted successfully!"), characterArt);
   } else {
@@ -252,6 +300,7 @@ async function checkOffTask(characterArt) {
     return;
   }
 
+  // prompt the user to select a task to check off
   const { id } = await selectTask("check off");
   const taskIndex = tasks.findIndex((task) => task.id === id);
   if (taskIndex !== -1) {
@@ -276,11 +325,15 @@ async function showTasks(characterArt) {
   }
 
   console.log(chalk.blue("here are all your tasks:"));
-  tasks.forEach((task) => {
+  // loop through the tasks array and display each task
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
     console.log(
-      `${task.id}. ${task.task} at ${task.time} - ${task.done ? "done" : "pending"}`
+      `${task.id}. ${task.task} at ${task.time} - ${
+        task.done ? "done" : "pending"
+      }`
     );
-  });
+  }
   console.log("");
 }
 
@@ -292,7 +345,9 @@ async function showGarden(characterArt) {
   }
 
   console.log(chalk.blue("here are all your plants:"));
-  for (const plant of plants) {
+  // loop through the plants array and display each plant
+  for (let i = 0; i < plants.length; i++) {
+    const plant = plants[i];
     const plantArt = await loadPlantArt(plant);
     console.log(chalk.green(plantArt));
   }
@@ -301,6 +356,7 @@ async function showGarden(characterArt) {
 
 // function to select a task based on action
 async function selectTask(action) {
+  // prompt the user to select a task from the tasks array
   const { id } = await inquirer.prompt([
     {
       type: "list",
@@ -319,6 +375,7 @@ async function selectTask(action) {
 // function to add a plant
 async function addPlant(characterArt) {
   const plantOptions = ["cactus", "tulips", "sunflower", "daisy", "sapling"];
+  // prompt the user to select a plant to add
   const { plant } = await inquirer.prompt([
     {
       type: "list",
@@ -328,6 +385,7 @@ async function addPlant(characterArt) {
     },
   ]);
 
+  // add the plant to the plants array
   plants.push(plant);
   const plantArt = await loadPlantArt(plant);
   await typeEffect(chalk.green("plant added successfully!"), plantArt);
