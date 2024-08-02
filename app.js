@@ -49,6 +49,15 @@ async function loadCharacterArt(filename) {
   return fs.promises.readFile(filePath, "utf8");
 }
 
+// function to load plant art from a file
+async function loadPlantArt(plantName) {
+  const filePath = path.resolve(
+    "/Users/haileypan/Documents/GitHub/capital-one-hackathon",
+    `${plantName}.txt`
+  );
+  return fs.promises.readFile(filePath, "utf8");
+}
+
 // main menu function
 async function mainMenu() {
   console.clear();
@@ -264,9 +273,10 @@ async function showGarden(characterArt) {
   }
 
   console.log(chalk.blue("here are all your plants:"));
-  plants.forEach((plant, index) => {
-    console.log(`${index + 1}. ${plant}`);
-  });
+  for (const plant of plants) {
+    const plantArt = await loadPlantArt(plant);
+    console.log(chalk.green(plantArt));
+  }
   console.log("");
 }
 
@@ -289,7 +299,7 @@ async function selectTask(action) {
 
 // function to add a plant
 async function addPlant(characterArt) {
-  const plantOptions = ["rose", "tulip", "sunflower", "daisy"];
+  const plantOptions = ["cactus", "tulips", "sunflower", "daisy", "sapling"];
   const { plant } = await inquirer.prompt([
     {
       type: "list",
@@ -300,7 +310,8 @@ async function addPlant(characterArt) {
   ]);
 
   plants.push(plant);
-  await typeEffect(chalk.green("plant added successfully!"), characterArt);
+  const plantArt = await loadPlantArt(plant);
+  await typeEffect(chalk.green("plant added successfully!"), plantArt);
   console.log("");
 }
 
