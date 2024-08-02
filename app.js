@@ -178,7 +178,15 @@ async function addTask(characterArt) {
     },
   ]);
 
-  tasks.push({ id: tasks.length + 1, task, done: false });
+  const { time } = await inquirer.prompt([
+    {
+      type: "input",
+      name: "time",
+      message: "enter the time you want to do the task (e.g., 14:00):",
+    },
+  ]);
+
+  tasks.push({ id: tasks.length + 1, task, time, done: false });
   await typeEffect(chalk.green("task added successfully!"), characterArt);
   console.log("");
 }
@@ -200,9 +208,18 @@ async function editTask(characterArt) {
     },
   ]);
 
+  const { newTime } = await inquirer.prompt([
+    {
+      type: "input",
+      name: "newTime",
+      message: "enter the new time for the task (e.g., 14:00):",
+    },
+  ]);
+
   const taskIndex = tasks.findIndex((task) => task.id === id);
   if (taskIndex !== -1) {
     tasks[taskIndex].task = newTask;
+    tasks[taskIndex].time = newTime;
     await typeEffect(chalk.green("task edited successfully!"), characterArt);
   } else {
     await typeEffect(chalk.red("task not found."), characterArt);
@@ -260,7 +277,9 @@ async function showTasks(characterArt) {
 
   console.log(chalk.blue("here are all your tasks:"));
   tasks.forEach((task) => {
-    console.log(`${task.id}. ${task.task} - ${task.done ? "done" : "pending"}`);
+    console.log(
+      `${task.id}. ${task.task} at ${task.time} - ${task.done ? "done" : "pending"}`
+    );
   });
   console.log("");
 }
