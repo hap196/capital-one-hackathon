@@ -3,3 +3,5 @@ Command line interface (CLI) project for the Capital One Summer Tech Immersive P
 
 ## tools
 - Node.js
+- JavaScript
+- Ascii Art Archive
